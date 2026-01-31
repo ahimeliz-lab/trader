@@ -1,6 +1,0 @@
-{
-  "version": 3,
-  "sources": [],
-  "sections": [
-    {"offset": {"line": 1, "column": 0}, "map": {"version":3,"sources":["turbopack:///[project]/app/globals.css"],"sourcesContent":[":root {\n  --ink: #1a1a1a;\n  --ink-soft: #5b5b5b;\n  --paper: #f6f1e7;\n}\n\n* {\n  box-sizing: border-box;\n}\n\nbody {\n  margin: 0;\n  color: var(--ink);\n  background: radial-gradient(circle at top left, rgba(255, 255, 255, 0.8), transparent 45%),\n    linear-gradient(135deg, #f6f1e7 0%, #f3eadc 45%, #f7efe2 100%);\n  font-family: var(--font-sans), \"Segoe UI\", \"Helvetica Neue\", Arial, sans-serif;\n}\n\nh1,\nh2,\nh3 {\n  font-family: var(--font-display), \"Georgia\", serif;\n}\n\nbutton,\ninput,\nselect,\ntextarea {\n  font-family: inherit;\n}\n"],"names":[],"mappings":"AAAA;;;;;;AAMA;;;;AAIA;;;;;;;AAQA;;;;AAMA"}}]
-}
