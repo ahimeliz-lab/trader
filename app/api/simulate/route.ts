@@ -9,6 +9,7 @@ import {
   StressTestConfig,
   SweepConfig,
   Timeframe,
+  KillSwitchConfig,
   runMonteCarlo,
   runParameterSweep,
   runReplayHarness,
@@ -129,6 +130,16 @@ async function fetchLast5mTime(sb: ReturnType<typeof sbAdmin>, symbol: string): 
 
 function mergeConfig(body: SimulateRequest, symbol: string, startMs: number, endMs: number): SimulationConfig {
   const base = AGGRESSIVE_STRESS_DEFAULTS;
+  const baseKill: KillSwitchConfig = base.stress?.killSwitch ?? {
+    maxDrawdownPct: 0,
+    maxConsecutiveLosses: 0,
+    volatilitySpikePct: 0,
+  };
+  const killSwitch: KillSwitchConfig = {
+    maxDrawdownPct: body.stress?.killSwitch?.maxDrawdownPct ?? baseKill.maxDrawdownPct,
+    maxConsecutiveLosses: body.stress?.killSwitch?.maxConsecutiveLosses ?? baseKill.maxConsecutiveLosses,
+    volatilitySpikePct: body.stress?.killSwitch?.volatilitySpikePct ?? baseKill.volatilitySpikePct,
+  };
   const stress: StressTestConfig = {
     ...base.stress!,
     ...(body.stress ?? {}),
@@ -142,7 +153,7 @@ function mergeConfig(body: SimulateRequest, symbol: string, startMs: number, end
     slippageBps: body.stress?.slippageBps ?? body.execution?.baseSlippageBps ?? base.stress!.slippageBps,
     feesBps: body.stress?.feesBps ?? body.execution?.feeBps ?? base.stress!.feesBps,
     rrTiers: { ...(base.stress?.rrTiers ?? {}), ...(body.stress?.rrTiers ?? {}) },
-    killSwitch: { ...(base.stress?.killSwitch ?? {}), ...(body.stress?.killSwitch ?? {}) },
+    killSwitch,
   };
   return {
     symbol,
