@@ -1,0 +1,30 @@
+:root {
+  --ink: #1a1a1a;
+  --ink-soft: #5b5b5b;
+  --paper: #f6f1e7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background: radial-gradient(circle at top left, rgba(255, 255, 255, 0.8), transparent 45%),
+    linear-gradient(135deg, #f6f1e7 0%, #f3eadc 45%, #f7efe2 100%);
+  font-family: var(--font-sans), "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display), "Georgia", serif;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}

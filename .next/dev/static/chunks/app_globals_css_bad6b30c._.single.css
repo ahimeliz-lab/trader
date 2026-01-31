@@ -1,0 +1,27 @@
+/* [project]/app/globals.css [app-client] (css) */
+:root {
+  --ink: #1a1a1a;
+  --ink-soft: #5b5b5b;
+  --paper: #f6f1e7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  color: var(--ink);
+  font-family: var(--font-sans), "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  background: radial-gradient(circle at 0 0, #fffc, #0000 45%), linear-gradient(135deg, #f6f1e7 0%, #f3eadc 45%, #f7efe2 100%);
+  margin: 0;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display), "Georgia", serif;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+}
+
+/*# sourceMappingURL=app_globals_css_bad6b30c._.single.css.map*/

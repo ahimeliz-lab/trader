@@ -1,0 +1,684 @@
+module.exports = [
+"[externals]/next/dist/compiled/next-server/app-route-turbo.runtime.dev.js [external] (next/dist/compiled/next-server/app-route-turbo.runtime.dev.js, cjs)", ((__turbopack_context__, module, exports) => {
+
+const mod = __turbopack_context__.x("next/dist/compiled/next-server/app-route-turbo.runtime.dev.js", () => require("next/dist/compiled/next-server/app-route-turbo.runtime.dev.js"));
+
+module.exports = mod;
+}),
+"[externals]/next/dist/compiled/@opentelemetry/api [external] (next/dist/compiled/@opentelemetry/api, cjs)", ((__turbopack_context__, module, exports) => {
+
+const mod = __turbopack_context__.x("next/dist/compiled/@opentelemetry/api", () => require("next/dist/compiled/@opentelemetry/api"));
+
+module.exports = mod;
+}),
+"[externals]/next/dist/compiled/next-server/app-page-turbo.runtime.dev.js [external] (next/dist/compiled/next-server/app-page-turbo.runtime.dev.js, cjs)", ((__turbopack_context__, module, exports) => {
+
+const mod = __turbopack_context__.x("next/dist/compiled/next-server/app-page-turbo.runtime.dev.js", () => require("next/dist/compiled/next-server/app-page-turbo.runtime.dev.js"));
+
+module.exports = mod;
+}),
+"[externals]/next/dist/server/app-render/work-unit-async-storage.external.js [external] (next/dist/server/app-render/work-unit-async-storage.external.js, cjs)", ((__turbopack_context__, module, exports) => {
+
+const mod = __turbopack_context__.x("next/dist/server/app-render/work-unit-async-storage.external.js", () => require("next/dist/server/app-render/work-unit-async-storage.external.js"));
+
+module.exports = mod;
+}),
+"[externals]/next/dist/server/app-render/work-async-storage.external.js [external] (next/dist/server/app-render/work-async-storage.external.js, cjs)", ((__turbopack_context__, module, exports) => {
+
+const mod = __turbopack_context__.x("next/dist/server/app-render/work-async-storage.external.js", () => require("next/dist/server/app-render/work-async-storage.external.js"));
+
+module.exports = mod;
+}),
+"[externals]/next/dist/shared/lib/no-fallback-error.external.js [external] (next/dist/shared/lib/no-fallback-error.external.js, cjs)", ((__turbopack_context__, module, exports) => {
+
+const mod = __turbopack_context__.x("next/dist/shared/lib/no-fallback-error.external.js", () => require("next/dist/shared/lib/no-fallback-error.external.js"));
+
+module.exports = mod;
+}),
+"[externals]/next/dist/server/app-render/after-task-async-storage.external.js [external] (next/dist/server/app-render/after-task-async-storage.external.js, cjs)", ((__turbopack_context__, module, exports) => {
+
+const mod = __turbopack_context__.x("next/dist/server/app-render/after-task-async-storage.external.js", () => require("next/dist/server/app-render/after-task-async-storage.external.js"));
+
+module.exports = mod;
+}),
+"[project]/app/api/analyze/route.ts [app-route] (ecmascript)", ((__turbopack_context__) => {
+"use strict";
+
+__turbopack_context__.s([
+    "POST",
+    ()=>POST,
+    "dynamic",
+    ()=>dynamic,
+    "revalidate",
+    ()=>revalidate,
+    "runtime",
+    ()=>runtime
+]);
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$server$2d$only$2f$empty$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/dist/compiled/server-only/empty.js [app-route] (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$server$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/server.js [app-route] (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$supabase$2f$supabase$2d$js$2f$dist$2f$index$2e$mjs__$5b$app$2d$route$5d$__$28$ecmascript$29$__$3c$locals$3e$__ = __turbopack_context__.i("[project]/node_modules/@supabase/supabase-js/dist/index.mjs [app-route] (ecmascript) <locals>");
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$openai$2f$index$2e$mjs__$5b$app$2d$route$5d$__$28$ecmascript$29$__$3c$locals$3e$__ = __turbopack_context__.i("[project]/node_modules/openai/index.mjs [app-route] (ecmascript) <locals>");
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$openai$2f$client$2e$mjs__$5b$app$2d$route$5d$__$28$ecmascript$29$__$3c$export__OpenAI__as__default$3e$__ = __turbopack_context__.i("[project]/node_modules/openai/client.mjs [app-route] (ecmascript) <export OpenAI as default>");
+;
+;
+;
+;
+const runtime = "nodejs";
+const dynamic = "force-dynamic";
+const revalidate = 0;
+function requireEnv(name) {
+    const value = process.env[name];
+    if (!value) throw new Error(`Missing env var: ${name}`);
+    return value;
+}
+function sbAdmin() {
+    const url = requireEnv("SUPABASE_URL");
+    const key = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+    return (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$supabase$2f$supabase$2d$js$2f$dist$2f$index$2e$mjs__$5b$app$2d$route$5d$__$28$ecmascript$29$__$3c$locals$3e$__["createClient"])(url, key, {
+        auth: {
+            persistSession: false
+        }
+    });
+}
+function openaiClient() {
+    const apiKey = requireEnv("OPENAI_API_KEY");
+    return new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$openai$2f$client$2e$mjs__$5b$app$2d$route$5d$__$28$ecmascript$29$__$3c$export__OpenAI__as__default$3e$__["default"]({
+        apiKey
+    });
+}
+function clamp(n, lo, hi) {
+    if (!Number.isFinite(n)) return lo;
+    return Math.min(hi, Math.max(lo, n));
+}
+function safeNum(value) {
+    if (value == null) return null;
+    const num = typeof value === "number" ? value : Number(value);
+    return Number.isFinite(num) ? num : null;
+}
+function toDbSymbol(symbol) {
+    const s = (symbol || "").trim().toUpperCase();
+    if (!s) return "BTCUSDT-PERP";
+    if (s.endsWith("-PERP")) return s;
+    return `${s}-PERP`;
+}
+function toBinanceSymbol(symbol) {
+    const s = (symbol || "").trim().toUpperCase();
+    if (!s) return "BTCUSDT";
+    return s.replace(/-PERP$/i, "").replace(/[^A-Z0-9]/g, "");
+}
+async function fetchCandles(sb, symbol, tf, lookback) {
+    const { data, error } = await sb.from("candles").select("open_time,open,high,low,close,volume,ema20,ema50,ema200,rsi14").eq("symbol", symbol).eq("timeframe", tf).order("open_time", {
+        ascending: false
+    }).limit(lookback);
+    if (error) throw new Error(`candles query failed: ${error.message}`);
+    return (data ?? []).map((row)=>{
+        const open = safeNum(row.open);
+        const high = safeNum(row.high);
+        const low = safeNum(row.low);
+        const close = safeNum(row.close);
+        const volume = safeNum(row.volume);
+        if (open == null || high == null || low == null || close == null || volume == null) return null;
+        return {
+            open_time: row.open_time,
+            open,
+            high,
+            low,
+            close,
+            volume,
+            ema20: safeNum(row.ema20),
+            ema50: safeNum(row.ema50),
+            ema200: safeNum(row.ema200),
+            rsi14: safeNum(row.rsi14)
+        };
+    }).filter((row)=>row != null).reverse();
+}
+function computeAtr(rows, period = 14) {
+    if (rows.length < period + 1) return null;
+    let sum = 0;
+    let count = 0;
+    for(let i = rows.length - period; i < rows.length; i += 1){
+        const current = rows[i];
+        const prev = rows[i - 1];
+        if (!prev) continue;
+        const tr = Math.max(current.high - current.low, Math.abs(current.high - prev.close), Math.abs(current.low - prev.close));
+        if (Number.isFinite(tr)) {
+            sum += tr;
+            count += 1;
+        }
+    }
+    return count ? sum / count : null;
+}
+function computeVolatilityPct(rows, period = 30) {
+    if (rows.length < period + 1) return null;
+    const start = rows.length - period - 1;
+    const returns = [];
+    for(let i = start + 1; i < rows.length; i += 1){
+        const prev = rows[i - 1];
+        const current = rows[i];
+        if (!prev || !current || prev.close <= 0) continue;
+        returns.push((current.close - prev.close) / prev.close);
+    }
+    if (!returns.length) return null;
+    const mean = returns.reduce((sum, r)=>sum + r, 0) / returns.length;
+    const variance = returns.reduce((sum, r)=>sum + (r - mean) ** 2, 0) / returns.length;
+    return Math.sqrt(variance) * 100;
+}
+function computeSwing(rows, lookback = 50) {
+    if (!rows.length) return {
+        high: null,
+        low: null
+    };
+    const slice = rows.slice(-lookback);
+    const high = Math.max(...slice.map((r)=>r.high));
+    const low = Math.min(...slice.map((r)=>r.low));
+    return {
+        high,
+        low
+    };
+}
+function computeTrend(ema20, ema50, ema200) {
+    if (ema20 == null || ema50 == null || ema200 == null) return "mixed";
+    if (ema20 > ema50 && ema50 > ema200) return "bullish";
+    if (ema20 < ema50 && ema50 < ema200) return "bearish";
+    if (ema20 > ema50) return "lean bullish";
+    if (ema20 < ema50) return "lean bearish";
+    return "range";
+}
+function summarizeTimeframe(tf, rows) {
+    if (!rows.length) {
+        return {
+            timeframe: tf,
+            bars: 0,
+            close: null,
+            changePct: null,
+            ema20: null,
+            ema50: null,
+            ema200: null,
+            rsi14: null,
+            atr: null,
+            atrPct: null,
+            swingHigh: null,
+            swingLow: null,
+            trend: "missing",
+            volatilityPct: null
+        };
+    }
+    const last = rows[rows.length - 1];
+    const prev = rows[rows.length - 2] ?? null;
+    const changePct = prev ? (last.close - prev.close) / prev.close * 100 : null;
+    const atr = computeAtr(rows, 14);
+    const atrPct = atr && last.close > 0 ? atr / last.close * 100 : null;
+    const { high, low } = computeSwing(rows, 50);
+    return {
+        timeframe: tf,
+        bars: rows.length,
+        close: last.close,
+        changePct,
+        ema20: last.ema20,
+        ema50: last.ema50,
+        ema200: last.ema200,
+        rsi14: last.rsi14,
+        atr,
+        atrPct,
+        swingHigh: high,
+        swingLow: low,
+        trend: computeTrend(last.ema20, last.ema50, last.ema200),
+        volatilityPct: computeVolatilityPct(rows, 30)
+    };
+}
+function uniqueNumbers(values) {
+    const out = [];
+    const seen = new Set();
+    for (const value of values){
+        if (value == null || !Number.isFinite(value)) continue;
+        const key = value.toFixed(2);
+        if (!seen.has(key)) {
+            seen.add(key);
+            out.push(value);
+        }
+    }
+    return out;
+}
+function deriveSnapshot(timeframes) {
+    const tf4h = timeframes["4h"];
+    const tf1d = timeframes["1d"];
+    const tf1h = timeframes["1h"];
+    const trendVotes = [
+        tf4h?.trend,
+        tf1d?.trend
+    ].filter(Boolean);
+    const bullishVotes = trendVotes.filter((t)=>t?.includes("bull")).length;
+    const bearishVotes = trendVotes.filter((t)=>t?.includes("bear")).length;
+    const regime = bullishVotes >= 2 ? "bullish" : bearishVotes >= 2 ? "bearish" : bullishVotes && bearishVotes ? "mixed" : "range";
+    const rsi = tf1h?.rsi14 ?? tf4h?.rsi14 ?? null;
+    const momentum = rsi == null ? "unknown" : rsi >= 60 ? "positive" : rsi <= 40 ? "negative" : "neutral";
+    const vol = tf1h?.volatilityPct ?? tf4h?.volatilityPct ?? null;
+    const volatility = vol == null ? "unknown" : vol >= 4 ? "high" : vol >= 2.5 ? "elevated" : "calm";
+    const support = uniqueNumbers([
+        tf4h?.swingLow,
+        tf1d?.swingLow,
+        tf4h?.ema200,
+        tf1d?.ema200
+    ]);
+    const resistance = uniqueNumbers([
+        tf4h?.swingHigh,
+        tf1d?.swingHigh,
+        tf4h?.ema50,
+        tf1d?.ema50
+    ]);
+    const pivots = uniqueNumbers([
+        tf4h?.ema20,
+        tf1d?.ema20,
+        tf1h?.ema20
+    ]);
+    const confidenceScore = clamp(50 + bullishVotes * 15 + bearishVotes * 15, 0, 100);
+    return {
+        regime,
+        momentum,
+        volatility,
+        keyLevels: {
+            support,
+            resistance,
+            pivots
+        },
+        confidenceScore
+    };
+}
+async function fetchBinanceLive(symbol) {
+    const url = `https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`;
+    const res = await fetch(url, {
+        cache: "no-store"
+    });
+    if (!res.ok) throw new Error(`Binance fetch failed: ${res.status}`);
+    const data = await res.json();
+    return {
+        price: safeNum(data.lastPrice),
+        change24hPct: safeNum(data.priceChangePercent),
+        high24h: safeNum(data.highPrice),
+        low24h: safeNum(data.lowPrice),
+        volume24h: safeNum(data.quoteVolume),
+        timestamp: data.closeTime ? new Date(data.closeTime).toISOString() : null
+    };
+}
+const responseSchema = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+        analysis: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+                headline: {
+                    type: "string"
+                },
+                summary: {
+                    type: "string"
+                },
+                marketRegime: {
+                    type: "string"
+                },
+                momentum: {
+                    type: "string"
+                },
+                volatility: {
+                    type: "string"
+                },
+                keyLevels: {
+                    type: "object",
+                    additionalProperties: false,
+                    properties: {
+                        support: {
+                            type: "array",
+                            items: {
+                                type: "number"
+                            }
+                        },
+                        resistance: {
+                            type: "array",
+                            items: {
+                                type: "number"
+                            }
+                        },
+                        pivots: {
+                            type: "array",
+                            items: {
+                                type: "number"
+                            }
+                        }
+                    },
+                    required: [
+                        "support",
+                        "resistance",
+                        "pivots"
+                    ]
+                },
+                riskNotes: {
+                    type: "array",
+                    items: {
+                        type: "string"
+                    }
+                },
+                confidence: {
+                    type: "object",
+                    additionalProperties: false,
+                    properties: {
+                        score: {
+                            type: "number"
+                        },
+                        rationale: {
+                            type: "array",
+                            items: {
+                                type: "string"
+                            }
+                        }
+                    },
+                    required: [
+                        "score",
+                        "rationale"
+                    ]
+                }
+            },
+            required: [
+                "headline",
+                "summary",
+                "marketRegime",
+                "momentum",
+                "volatility",
+                "keyLevels",
+                "riskNotes",
+                "confidence"
+            ]
+        },
+        strategies: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+                intraday: {
+                    $ref: "#/$defs/strategy"
+                },
+                scalp: {
+                    $ref: "#/$defs/strategy"
+                },
+                swing: {
+                    $ref: "#/$defs/strategy"
+                }
+            },
+            required: [
+                "intraday",
+                "scalp",
+                "swing"
+            ]
+        }
+    },
+    required: [
+        "analysis",
+        "strategies"
+    ],
+    $defs: {
+        strategy: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+                name: {
+                    type: "string"
+                },
+                bias: {
+                    type: "string",
+                    enum: [
+                        "LONG",
+                        "SHORT",
+                        "NEUTRAL"
+                    ]
+                },
+                setup: {
+                    type: "string"
+                },
+                entry: {
+                    type: "object",
+                    additionalProperties: false,
+                    properties: {
+                        type: {
+                            type: "string",
+                            enum: [
+                                "market",
+                                "limit",
+                                "stop"
+                            ]
+                        },
+                        price: {
+                            type: [
+                                "number",
+                                "null"
+                            ]
+                        },
+                        zone: {
+                            type: [
+                                "object",
+                                "null"
+                            ],
+                            additionalProperties: false,
+                            properties: {
+                                lo: {
+                                    type: "number"
+                                },
+                                hi: {
+                                    type: "number"
+                                }
+                            },
+                            required: [
+                                "lo",
+                                "hi"
+                            ]
+                        }
+                    },
+                    required: [
+                        "type",
+                        "price",
+                        "zone"
+                    ]
+                },
+                stop: {
+                    type: "number"
+                },
+                targets: {
+                    type: "array",
+                    items: {
+                        type: "number"
+                    }
+                },
+                timeHorizon: {
+                    type: "string"
+                },
+                positionSizing: {
+                    type: "string"
+                },
+                invalidation: {
+                    type: "string"
+                },
+                rationale: {
+                    type: "array",
+                    items: {
+                        type: "string"
+                    }
+                },
+                confidence: {
+                    type: "number"
+                }
+            },
+            required: [
+                "name",
+                "bias",
+                "setup",
+                "entry",
+                "stop",
+                "targets",
+                "timeHorizon",
+                "positionSizing",
+                "invalidation",
+                "rationale",
+                "confidence"
+            ]
+        }
+    }
+};
+function extractJsonObject(text) {
+    const trimmed = text.trim();
+    if (trimmed.startsWith("{") && trimmed.endsWith("}")) return trimmed;
+    const first = trimmed.indexOf("{");
+    const last = trimmed.lastIndexOf("}");
+    if (first >= 0 && last > first) return trimmed.slice(first, last + 1);
+    return null;
+}
+function buildFallbackAnalysis(derived) {
+    return {
+        headline: `BTC regime: ${derived.regime} with ${derived.momentum} momentum`,
+        summary: "Fallback analysis uses computed trend, momentum, and volatility metrics. Connect an OpenAI model for full narrative output.",
+        marketRegime: derived.regime,
+        momentum: derived.momentum,
+        volatility: derived.volatility,
+        keyLevels: derived.keyLevels,
+        riskNotes: [
+            "Model output unavailable. Validate levels and conditions manually before trading."
+        ],
+        confidence: {
+            score: derived.confidenceScore,
+            rationale: [
+                "Score derived from multi-timeframe trend alignment."
+            ]
+        }
+    };
+}
+function buildFallbackStrategies(price, derived) {
+    const bias = derived.regime === "bullish" ? "LONG" : derived.regime === "bearish" ? "SHORT" : "NEUTRAL";
+    const base = price && Number.isFinite(price) ? price : 0;
+    const buffer = base ? base * 0.01 : 0;
+    const stop = bias === "LONG" ? base - buffer : base + buffer;
+    const targets = bias === "SHORT" ? [
+        base - buffer * 1.2,
+        base - buffer * 2.4
+    ] : [
+        base + buffer * 1.2,
+        base + buffer * 2.4
+    ];
+    const build = (name, horizon)=>({
+            name,
+            bias: bias,
+            setup: "Trend-aligned pullback with confirmation.",
+            entry: {
+                type: "limit",
+                price: base || undefined,
+                zone: null
+            },
+            stop: stop || 0,
+            targets,
+            timeHorizon: horizon,
+            positionSizing: "Scale in with 25-35% size, tighten risk on confirmation.",
+            invalidation: "Break of the nearest swing level or EMA200.",
+            rationale: [
+                "Uses regime bias and key swing levels from candles."
+            ],
+            confidence: derived.confidenceScore
+        });
+    return {
+        intraday: build("Intraday Plan", "Minutes to hours"),
+        scalp: build("Scalp Plan", "15-45 minutes"),
+        swing: build("Mid/Long-Term Plan", "Days to weeks")
+    };
+}
+async function callModel(payload) {
+    const client = openaiClient();
+    const model = process.env.OPENAI_STRATEGIST_MODEL || process.env.OPENAI_TRADE_MODEL || process.env.OPENAI_CHAT_MODEL || "gpt-4o";
+    const response = await client.responses.create({
+        model,
+        temperature: 0.2,
+        max_output_tokens: 1200,
+        text: {
+            format: {
+                type: "json_schema",
+                name: "btc_strategist",
+                schema: responseSchema,
+                strict: true
+            }
+        },
+        instructions: "You are an institutional crypto strategist. Use only the provided data. " + "Generate a thorough Bitcoin analysis and three strategy playbooks: intraday, scalp, and mid/long-term. " + "Include bias, entry, stop, targets, invalidation, and sizing guidance. " + "Use numeric price levels from the input; do not invent data.",
+        input: JSON.stringify(payload)
+    });
+    const text = String(response.output_text ?? "").trim();
+    const jsonText = extractJsonObject(text) ?? text;
+    return JSON.parse(jsonText);
+}
+async function POST(req) {
+    try {
+        const body = await req.json();
+        const mode = body.mode === "LTF" ? "LTF" : "HTF";
+        const symbolInput = (body.symbol || "BTCUSDT").trim().toUpperCase();
+        const lookback = clamp(body.lookback ?? (mode === "LTF" ? 360 : 540), 240, 2000);
+        const dbSymbol = toDbSymbol(symbolInput);
+        const binanceSymbol = toBinanceSymbol(symbolInput);
+        const timeframes = mode === "LTF" ? [
+            "15m",
+            "1h",
+            "4h"
+        ] : [
+            "1h",
+            "4h",
+            "1d"
+        ];
+        const sb = sbAdmin();
+        const rowsByTf = await Promise.all(timeframes.map((tf)=>fetchCandles(sb, dbSymbol, tf, lookback)));
+        const summaries = timeframes.reduce((acc, tf, index)=>{
+            acc[tf] = summarizeTimeframe(tf, rowsByTf[index]);
+            return acc;
+        }, {});
+        const live = await fetchBinanceLive(binanceSymbol);
+        const derived = deriveSnapshot(summaries);
+        const payload = {
+            symbol: symbolInput,
+            mode,
+            live,
+            timeframes: summaries,
+            derived
+        };
+        let analysis = null;
+        let strategies = null;
+        let model = "fallback";
+        let modelError;
+        try {
+            const modelOutput = await callModel(payload);
+            analysis = modelOutput.analysis;
+            strategies = modelOutput.strategies;
+            model = "openai";
+        } catch (err) {
+            modelError = err?.message || "Model output unavailable.";
+            analysis = buildFallbackAnalysis(derived);
+            strategies = buildFallbackStrategies(live.price, derived);
+        }
+        const response = {
+            ok: true,
+            mode,
+            symbol: symbolInput,
+            generatedAt: new Date().toISOString(),
+            model,
+            modelError,
+            live,
+            timeframes: summaries,
+            derived,
+            analysis,
+            strategies
+        };
+        return __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$server$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["NextResponse"].json(response, {
+            status: 200
+        });
+    } catch (err) {
+        return __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$server$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["NextResponse"].json({
+            ok: false,
+            error: err?.message || "Unknown error"
+        }, {
+            status: 500
+        });
+    }
+}
+}),
+];
+
+//# sourceMappingURL=%5Broot-of-the-server%5D__831e1418._.js.map
