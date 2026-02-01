@@ -2,6 +2,8 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
+import { z } from "zod";
+import { zodTextFormat } from "openai/helpers/zod";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -434,6 +436,62 @@ const responseSchema = {
   },
 };
 
+const StrategySchema = z
+  .object({
+    name: z.string(),
+    bias: z.enum(["LONG", "SHORT", "NEUTRAL"]),
+    setup: z.string(),
+    entry: z.object({
+      type: z.enum(["market", "limit", "stop"]),
+      price: z.number().nullable(),
+      zone: z
+        .object({
+          lo: z.number(),
+          hi: z.number(),
+        })
+        .nullable(),
+    }),
+    stop: z.number(),
+    targets: z.array(z.number()),
+    timeHorizon: z.string(),
+    positionSizing: z.string(),
+    invalidation: z.string(),
+    rationale: z.array(z.string()),
+    confidence: z.number(),
+  })
+  .strict();
+
+const AnalysisSchema = z
+  .object({
+    headline: z.string(),
+    summary: z.string(),
+    marketRegime: z.string(),
+    momentum: z.string(),
+    volatility: z.string(),
+    keyLevels: z.object({
+      support: z.array(z.number()),
+      resistance: z.array(z.number()),
+      pivots: z.array(z.number()),
+    }),
+    riskNotes: z.array(z.string()),
+    confidence: z.object({
+      score: z.number(),
+      rationale: z.array(z.string()),
+    }),
+  })
+  .strict();
+
+const StrategistSchema = z
+  .object({
+    analysis: AnalysisSchema,
+    strategies: z.object({
+      intraday: StrategySchema,
+      scalp: StrategySchema,
+      swing: StrategySchema,
+    }),
+  })
+  .strict();
+
 function normalizeJson(text: string) {
   return text
     .replace(/[\u201C\u201D]/g, "\"")
@@ -564,23 +622,40 @@ async function callModel(payload: any) {
     process.env.OPENAI_CHAT_MODEL ||
     "gpt-4o";
 
+  const instructions =
+    "You are an institutional crypto strategist. Use only the provided data. " +
+    "Return JSON only. Generate a Bitcoin analysis and three strategy playbooks: intraday, scalp, and mid/long-term. " +
+    "Include bias, entry, stop, targets, invalidation, and sizing guidance. " +
+    "Keep summary under 90 words. Risk notes max 4 bullets. Rationale max 4 bullets per strategy. " +
+    "Use numeric price levels from the input; do not invent data.";
+
+  try {
+    const parsed = await client.responses.parse({
+      model,
+      temperature: 0.2,
+      max_output_tokens: 1600,
+      text: {
+        format: zodTextFormat(StrategistSchema, "btc_strategist"),
+      },
+      instructions,
+      input: JSON.stringify(payload),
+    });
+
+    const outputParsed = (parsed as any).output_parsed;
+    if (outputParsed) return outputParsed;
+  } catch {
+    // fall through to JSON-mode fallback
+  }
+
   const response = await client.responses.create({
     model,
-    temperature: 0.2,
-    max_output_tokens: 1200,
+    temperature: 0.1,
+    max_output_tokens: 1600,
     text: {
-      format: {
-        type: "json_schema",
-        name: "btc_strategist",
-        schema: responseSchema,
-        strict: true,
-      },
+      format: { type: "json_object" },
+      verbosity: "low",
     },
-    instructions:
-      "You are an institutional crypto strategist. Use only the provided data. " +
-      "Generate a thorough Bitcoin analysis and three strategy playbooks: intraday, scalp, and mid/long-term. " +
-      "Include bias, entry, stop, targets, invalidation, and sizing guidance. " +
-      "Use numeric price levels from the input; do not invent data.",
+    instructions,
     input: JSON.stringify(payload),
   });
 
