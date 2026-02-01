@@ -260,7 +260,12 @@ export async function POST(req: Request) {
         : null;
 
     return NextResponse.json(
-      { ok: true, ...result, monteCarlo: monteCarlo ?? undefined, replay: replay ?? undefined, parameterSweep: parameterSweep ?? undefined },
+      {
+        ...result,
+        monteCarlo: monteCarlo ?? undefined,
+        replay: replay ?? undefined,
+        parameterSweep: parameterSweep ?? undefined,
+      },
       { status: 200 }
     );
   } catch (e) {
