@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-type Timeframe = "15m" | "1h" | "4h" | "1d";
+type Timeframe = "5m" | "15m" | "1h" | "4h" | "1d";
 
 type CandleRowRaw = {
   open_time: string;
@@ -72,6 +72,7 @@ type StrategistResponse = {
   modelError?: string;
   liveError?: string;
   liveSource?: string;
+  confirmations?: ConfirmationSignal[];
   live?: {
     price: number | null;
     change24hPct: number | null;
@@ -84,6 +85,12 @@ type StrategistResponse = {
   derived?: DerivedSnapshot;
   analysis?: any;
   strategies?: any;
+};
+
+type ConfirmationSignal = {
+  name: string;
+  timeframe: Timeframe;
+  direction: "bullish" | "bearish";
 };
 
 function requireEnv(name: string): string {
@@ -259,6 +266,246 @@ function summarizeTimeframe(tf: Timeframe, rows: CandleRow[]): TimeframeSummary 
     trend: computeTrend(last.ema20, last.ema50, last.ema200),
     volatilityPct: computeVolatilityPct(rows, 30),
   };
+}
+
+function computeAvgVolume(rows: CandleRow[], lookback = 30) {
+  if (!rows.length) return 0;
+  const slice = rows.slice(-lookback);
+  const sum = slice.reduce((acc, r) => acc + r.volume, 0);
+  return slice.length ? sum / slice.length : 0;
+}
+
+function detectCandlePattern(rows: CandleRow[]): Array<"bullish_engulfing" | "bearish_engulfing" | "pin_bar"> {
+  if (rows.length < 2) return [];
+  const prev = rows[rows.length - 2];
+  const last = rows[rows.length - 1];
+  const signals: Array<"bullish_engulfing" | "bearish_engulfing" | "pin_bar"> = [];
+
+  const prevBull = prev.close > prev.open;
+  const lastBull = last.close > last.open;
+  const prevBear = prev.close < prev.open;
+  const lastBear = last.close < last.open;
+
+  const bullishEngulf =
+    lastBull && prevBear && last.open <= prev.close && last.close >= prev.open && last.close > prev.open;
+  const bearishEngulf =
+    lastBear && prevBull && last.open >= prev.close && last.close <= prev.open && last.close < prev.open;
+
+  if (bullishEngulf) signals.push("bullish_engulfing");
+  if (bearishEngulf) signals.push("bearish_engulfing");
+
+  const body = Math.abs(last.close - last.open);
+  const range = last.high - last.low;
+  if (range > 0) {
+    const upperWick = last.high - Math.max(last.close, last.open);
+    const lowerWick = Math.min(last.close, last.open) - last.low;
+    const isPin = body / range < 0.3 && (upperWick / range > 0.45 || lowerWick / range > 0.45);
+    if (isPin) signals.push("pin_bar");
+  }
+
+  return signals;
+}
+
+function detectEmaReclaim(rows: CandleRow[]): Array<"ema_reclaim" | "ema_rejection"> {
+  if (rows.length < 2) return [];
+  const prev = rows[rows.length - 2];
+  const last = rows[rows.length - 1];
+  if (last.ema20 == null || prev.ema20 == null) return [];
+  const signals: Array<"ema_reclaim" | "ema_rejection"> = [];
+
+  const prevBelow = prev.close < prev.ema20;
+  const lastAbove = last.close > last.ema20;
+  const prevAbove = prev.close > prev.ema20;
+  const lastBelow = last.close < last.ema20;
+
+  if (prevBelow && lastAbove) signals.push("ema_reclaim");
+  if (prevAbove && lastBelow) signals.push("ema_rejection");
+
+  return signals;
+}
+
+function findSwingPoints(rows: CandleRow[], lookback = 20) {
+  const highs: number[] = [];
+  const lows: number[] = [];
+  const start = Math.max(1, rows.length - lookback);
+  for (let i = start; i < rows.length - 1; i += 1) {
+    const prev = rows[i - 1];
+    const cur = rows[i];
+    const next = rows[i + 1];
+    if (cur.high > prev.high && cur.high > next.high) highs.push(i);
+    if (cur.low < prev.low && cur.low < next.low) lows.push(i);
+  }
+  return { highs, lows };
+}
+
+function detectRsiDivergence(rows: CandleRow[]): Array<"bullish_divergence" | "bearish_divergence"> {
+  const signals: Array<"bullish_divergence" | "bearish_divergence"> = [];
+  if (rows.length < 10) return signals;
+  const { highs, lows } = findSwingPoints(rows, 30);
+  if (lows.length >= 2) {
+    const a = lows[lows.length - 2];
+    const b = lows[lows.length - 1];
+    const priceLowerLow = rows[b].low < rows[a].low;
+    const rsiHigherLow =
+      rows[a].rsi14 != null &&
+      rows[b].rsi14 != null &&
+      Number(rows[b].rsi14) > Number(rows[a].rsi14);
+    if (priceLowerLow && rsiHigherLow) signals.push("bullish_divergence");
+  }
+  if (highs.length >= 2) {
+    const a = highs[highs.length - 2];
+    const b = highs[highs.length - 1];
+    const priceHigherHigh = rows[b].high > rows[a].high;
+    const rsiLowerHigh =
+      rows[a].rsi14 != null &&
+      rows[b].rsi14 != null &&
+      Number(rows[b].rsi14) < Number(rows[a].rsi14);
+    if (priceHigherHigh && rsiLowerHigh) signals.push("bearish_divergence");
+  }
+  return signals;
+}
+
+function detectVolumeShift(rows: CandleRow[]): Array<"volume_delta_shift"> {
+  if (rows.length < 5) return [];
+  const last = rows[rows.length - 1];
+  const avg = computeAvgVolume(rows, 20);
+  if (avg <= 0) return [];
+  const surge = last.volume > avg * 1.4;
+  return surge ? ["volume_delta_shift"] : [];
+}
+
+function buildConfirmations(tf: Timeframe, rows: CandleRow[]): ConfirmationSignal[] {
+  const confirmations: ConfirmationSignal[] = [];
+  const candleSignals = detectCandlePattern(rows);
+  for (const sig of candleSignals) {
+    confirmations.push({
+      name: sig,
+      timeframe: tf,
+      direction: sig.startsWith("bullish") ? "bullish" : sig.startsWith("bearish") ? "bearish" : "bullish",
+    });
+  }
+
+  const emaSignals = detectEmaReclaim(rows);
+  for (const sig of emaSignals) {
+    confirmations.push({
+      name: sig,
+      timeframe: tf,
+      direction: sig === "ema_reclaim" ? "bullish" : "bearish",
+    });
+  }
+
+  const rsiSignals = detectRsiDivergence(rows);
+  for (const sig of rsiSignals) {
+    confirmations.push({
+      name: sig,
+      timeframe: tf,
+      direction: sig === "bullish_divergence" ? "bullish" : "bearish",
+    });
+  }
+
+  const volumeSignals = detectVolumeShift(rows);
+  const last = rows[rows.length - 1];
+  if (volumeSignals.length && last) {
+    confirmations.push({
+      name: "volume_delta_shift",
+      timeframe: tf,
+      direction: last.close >= last.open ? "bullish" : "bearish",
+    });
+  }
+
+  return confirmations;
+}
+
+function uniqStrings(values: string[]) {
+  return Array.from(new Set(values));
+}
+
+function classifyTrade(input: {
+  bias: "LONG" | "SHORT" | "NEUTRAL";
+  trendAligned: boolean;
+  strategyKey: "scalp" | "intraday" | "swing";
+  regime: string;
+  volatility: string;
+}) {
+  if (input.bias === "NEUTRAL") return "Mean reversion";
+  if (input.trendAligned) return "Trend continuation";
+  if (input.strategyKey === "scalp") return "Counter-trend scalp";
+  if (input.regime === "range") return "Mean reversion";
+  if (input.volatility === "high" || input.volatility === "elevated") return "Breakout / failure";
+  return "Mean reversion";
+}
+
+function enrichStrategies(
+  strategies: any,
+  derived: DerivedSnapshot,
+  confirmations: ConfirmationSignal[]
+) {
+  const out = { ...strategies };
+  const mapping: Array<{
+    key: "scalp" | "intraday" | "swing";
+    allowed: Timeframe[];
+  }> = [
+    { key: "scalp", allowed: ["5m", "15m"] },
+    { key: "intraday", allowed: ["15m", "1h"] },
+    { key: "swing", allowed: ["4h", "1d"] },
+  ];
+
+  for (const entry of mapping) {
+    const strat = out[entry.key];
+    if (!strat) continue;
+    const bias = strat.bias as "LONG" | "SHORT" | "NEUTRAL";
+    const direction = bias === "LONG" ? "bullish" : bias === "SHORT" ? "bearish" : null;
+
+    const signals =
+      direction == null
+        ? []
+        : confirmations.filter((c) => entry.allowed.includes(c.timeframe) && c.direction === direction);
+    const passed = signals.length > 0;
+    const usedTimeframes = uniqStrings(signals.map((s) => s.timeframe));
+
+    const trendAligned =
+      bias === "LONG"
+        ? derived.regime === "bullish"
+        : bias === "SHORT"
+          ? derived.regime === "bearish"
+          : false;
+    const counterTrend = bias !== "NEUTRAL" && !trendAligned;
+
+    const blockedBy: string[] = [];
+    if (!passed) blockedBy.push("no_confirmation");
+    if (counterTrend) blockedBy.push("counter_trend");
+
+    const classification = classifyTrade({
+      bias,
+      trendAligned,
+      strategyKey: entry.key,
+      regime: derived.regime,
+      volatility: derived.volatility,
+    });
+
+    out[entry.key] = {
+      ...strat,
+      enabled: passed,
+      classification,
+      confirmation: {
+        passed,
+        signals,
+      },
+      timeframeIntegrity: {
+        allowed: entry.allowed,
+        used: usedTimeframes,
+        passed: passed && usedTimeframes.every((tf) => entry.allowed.includes(tf as Timeframe)),
+      },
+      postMortem: {
+        allowedBy: signals.map((s) => s.name),
+        blockedBy,
+        trendAligned,
+        counterTrend,
+      },
+    };
+  }
+
+  return out;
 }
 
 function uniqueNumbers(values: Array<number | null | undefined>) {
@@ -682,10 +929,14 @@ export async function POST(req: Request) {
     const dbSymbol = toDbSymbol(symbolInput);
     const binanceSymbol = toBinanceSymbol(symbolInput);
 
-    const timeframes: Timeframe[] = mode === "LTF" ? ["15m", "1h", "4h"] : ["1h", "4h", "1d"];
+    const timeframes: Timeframe[] = mode === "LTF" ? ["5m", "15m", "1h", "4h"] : ["1h", "4h", "1d"];
 
     const sb = sbAdmin();
     const rowsByTf = await Promise.all(timeframes.map((tf) => fetchCandles(sb, dbSymbol, tf, lookback)));
+    const rowsMap = timeframes.reduce<Record<Timeframe, CandleRow[]>>((acc, tf, index) => {
+      acc[tf] = rowsByTf[index] ?? [];
+      return acc;
+    }, {} as Record<Timeframe, CandleRow[]>);
     const summaries = timeframes.reduce<Partial<Record<Timeframe, TimeframeSummary>>>((acc, tf, index) => {
       acc[tf] = summarizeTimeframe(tf, rowsByTf[index]);
       return acc;
@@ -723,6 +974,7 @@ export async function POST(req: Request) {
       };
     }
     const derived = deriveSnapshot(summaries);
+    const confirmations = timeframes.flatMap((tf) => buildConfirmations(tf, rowsMap[tf] ?? []));
 
     const payload = {
       symbol: symbolInput,
@@ -730,6 +982,7 @@ export async function POST(req: Request) {
       live,
       timeframes: summaries,
       derived,
+      confirmations,
     };
 
     let analysis: any = null;
@@ -748,6 +1001,8 @@ export async function POST(req: Request) {
       strategies = buildFallbackStrategies(live.price, derived);
     }
 
+    strategies = enrichStrategies(strategies, derived, confirmations);
+
     const response: StrategistResponse = {
       ok: true,
       mode,
@@ -762,6 +1017,7 @@ export async function POST(req: Request) {
       derived,
       analysis,
       strategies,
+      confirmations,
     };
 
     return NextResponse.json(response, { status: 200 });

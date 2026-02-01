@@ -35,6 +35,23 @@ type Strategy = {
   invalidation: string;
   rationale: string[];
   confidence: number;
+  enabled?: boolean;
+  classification?: string;
+  confirmation?: {
+    passed: boolean;
+    signals: Array<{ name: string; timeframe: string; direction: "bullish" | "bearish" }>;
+  };
+  timeframeIntegrity?: {
+    allowed: string[];
+    used: string[];
+    passed: boolean;
+  };
+  postMortem?: {
+    allowedBy: string[];
+    blockedBy: string[];
+    trendAligned: boolean;
+    counterTrend: boolean;
+  };
 };
 
 type Analysis = {
@@ -93,6 +110,11 @@ const formatPct = (value: number | null | undefined) => {
   return `${sign}${value.toFixed(2)}%`;
 };
 
+const formatSignal = (signal: { name: string; timeframe: string; direction: "bullish" | "bearish" }) => {
+  const label = signal.name.replace(/_/g, " ");
+  return `${label} (${signal.timeframe})`;
+};
+
 const asList = (items: string[] | undefined) => (Array.isArray(items) && items.length ? items : []);
 
 const asNums = (items: number[] | undefined) => (Array.isArray(items) && items.length ? items : []);
@@ -141,7 +163,7 @@ export default function StrategistDashboard() {
   const strategies = data?.strategies ?? null;
   const timeframes = data?.timeframes ?? {};
   const orderedTimeframes = Object.values(timeframes).sort((a, b) => {
-    const order = ["15m", "1h", "4h", "1d"];
+    const order = ["5m", "15m", "1h", "4h", "1d"];
     return order.indexOf(a.timeframe) - order.indexOf(b.timeframe);
   });
 
@@ -324,7 +346,17 @@ export default function StrategistDashboard() {
                     <h3>{strategy.name}</h3>
                     <p>{strategy.timeHorizon}</p>
                   </div>
-                  <span className={`bias ${strategy.bias.toLowerCase()}`}>{strategy.bias}</span>
+                  <div className="strategy-meta">
+                    <span className={`bias ${strategy.bias.toLowerCase()}`}>{strategy.bias}</span>
+                    <span className={`status ${strategy.enabled === false ? "blocked" : "enabled"}`}>
+                      {strategy.enabled === false ? "Blocked" : "Enabled"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="strategy-row">
+                  <span>Classification</span>
+                  <strong>{strategy.classification ?? "n/a"}</strong>
                 </div>
 
                 <div className="strategy-row">
@@ -358,6 +390,39 @@ export default function StrategistDashboard() {
                 <div className="strategy-row">
                   <span>Positioning</span>
                   <strong>{strategy.positionSizing}</strong>
+                </div>
+
+                <div className="strategy-row">
+                  <span>Confirmation</span>
+                  <strong>
+                    {strategy.confirmation?.signals?.length
+                      ? strategy.confirmation.signals.map(formatSignal).join(" | ")
+                      : "No confirmation"}
+                  </strong>
+                </div>
+
+                <div className="strategy-row">
+                  <span>Timeframes</span>
+                  <strong>
+                    {strategy.timeframeIntegrity?.allowed?.length
+                      ? `Allowed ${strategy.timeframeIntegrity.allowed.join(", ")}`
+                      : "Allowed n/a"}
+                    {strategy.timeframeIntegrity?.used?.length
+                      ? ` | Used ${strategy.timeframeIntegrity.used.join(", ")}`
+                      : " | Used n/a"}
+                  </strong>
+                </div>
+
+                <div className="strategy-row">
+                  <span>Post-mortem</span>
+                  <strong>
+                    {strategy.postMortem?.allowedBy?.length
+                      ? `Allowed by ${strategy.postMortem.allowedBy.join(", ")}`
+                      : "Allowed by none"}
+                    {strategy.postMortem?.blockedBy?.length
+                      ? ` | Blocked by ${strategy.postMortem.blockedBy.join(", ")}`
+                      : ""}
+                  </strong>
                 </div>
 
                 <div className="strategy-notes">
@@ -670,6 +735,11 @@ export default function StrategistDashboard() {
           justify-content: space-between;
           align-items: center;
         }
+        .strategy-meta {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+        }
         .strategy-header h3 {
           margin: 0;
         }
@@ -697,6 +767,22 @@ export default function StrategistDashboard() {
         .bias.neutral {
           background: rgba(64, 64, 64, 0.1);
           color: #444;
+        }
+        .status {
+          padding: 6px 12px;
+          border-radius: 999px;
+          font-weight: 700;
+          font-size: 0.7rem;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+        }
+        .status.enabled {
+          background: rgba(20, 128, 74, 0.12);
+          color: #14804a;
+        }
+        .status.blocked {
+          background: rgba(187, 59, 45, 0.12);
+          color: #bb3b2d;
         }
         .strategy-row {
           display: grid;
