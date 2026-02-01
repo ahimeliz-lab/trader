@@ -442,11 +442,45 @@ function normalizeJson(text: string) {
 }
 
 function extractJsonObject(text: string) {
-  const trimmed = normalizeJson(text);
-  if (trimmed.startsWith("{") && trimmed.endsWith("}")) return trimmed;
-  const first = trimmed.indexOf("{");
-  const last = trimmed.lastIndexOf("}");
-  if (first >= 0 && last > first) return trimmed.slice(first, last + 1);
+  const input = normalizeJson(text);
+  if (!input) return null;
+  if (input.startsWith("{") && input.endsWith("}")) return input;
+
+  let inString = false;
+  let escaped = false;
+  let depth = 0;
+  let start = -1;
+
+  for (let i = 0; i < input.length; i += 1) {
+    const ch = input[i];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === "\\") {
+        escaped = true;
+      } else if (ch === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === "\"") {
+      inString = true;
+      continue;
+    }
+    if (ch === "{") {
+      if (depth === 0) start = i;
+      depth += 1;
+      continue;
+    }
+    if (ch === "}") {
+      if (depth > 0) depth -= 1;
+      if (depth === 0 && start >= 0) {
+        return input.slice(start, i + 1);
+      }
+    }
+  }
+
   return null;
 }
 
