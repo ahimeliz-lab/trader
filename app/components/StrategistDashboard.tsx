@@ -25,7 +25,7 @@ type Strategy = {
   setup: string;
   entry: {
     type: "market" | "limit" | "stop";
-    price?: number;
+    price?: number | null;
     zone?: { lo: number; hi: number } | null;
   };
   stop: number;
@@ -35,10 +35,12 @@ type Strategy = {
   invalidation: string;
   rationale: string[];
   confidence: number;
+  actionable?: boolean;
   enabled?: boolean;
   classification?: string;
   confirmation?: {
     passed: boolean;
+    minConfirmations?: number;
     signals: Array<{ name: string; timeframe: string; direction: "bullish" | "bearish" }>;
   };
   timeframeIntegrity?: {
@@ -52,6 +54,17 @@ type Strategy = {
     trendAligned: boolean;
     counterTrend: boolean;
   };
+  sessionPreference?: {
+    setupType: "BREAKOUT" | "MEAN_REVERSION" | "BALANCED";
+    preferred: boolean;
+  };
+  learning?: {
+    rank: number;
+    avgR: number;
+    winRate: number;
+    count: number;
+    reason: string;
+  } | null;
 };
 
 type Analysis = {
@@ -71,10 +84,72 @@ type StrategistResponse = {
   mode?: "LTF" | "HTF";
   symbol?: string;
   generatedAt?: string;
-  model?: "openai" | "fallback";
+  analysisRunId?: string;
+  model?: "openai" | "fallback" | "deterministic";
   modelError?: string;
   liveError?: string;
   liveSource?: string;
+  calibration?: {
+    factor: number;
+    confidenceDelta: number;
+    minConfirmations: number;
+    tightenGates: boolean;
+    loosenGates: boolean;
+    summary: string;
+  };
+  previousVerdict?: {
+    label: "good" | "mixed" | "bad";
+    scoreTotal: number;
+    horizonMinutes: number;
+    allowedBy: string[];
+    blockedBy: string[];
+    trendAligned: boolean | null;
+    counterTrend: boolean | null;
+  };
+  setupLearning?: Array<{
+    setupKey: "scalp" | "intraday" | "swing";
+    count: number;
+    winRate: number;
+    avgR: number;
+    rank: number;
+    reason: string;
+  }>;
+  sessionContext?: {
+    utcNow: string;
+    sessionName: string;
+    dayType: "WEEKDAY" | "WEEKEND";
+    liquidity: "Normal" | "Thin";
+    statsConfidence: "LOW" | "MEDIUM" | "HIGH";
+    nextTransitionType: string;
+    nextTransitionAt: string;
+    minutesToNextTransition: number;
+    transitionWindowMinutes: number;
+    lookbackDays: number;
+    statsTimeframe: string;
+    stats: {
+      sampleSize: number;
+      avgTrueRange: number;
+      avgRealizedRange: number;
+      returnStdDev: number;
+      avgNetReturn: number;
+      positiveReturnRate: number;
+      breakoutRate: number;
+      fakeoutRate: number;
+      continuationRate: number;
+      meanReversionRate: number;
+      volatilityMultiplier: number;
+    } | null;
+    adjustment: {
+      expectedVolatilityMultiplier: number;
+      fakeoutRisk: number;
+      preferredSetupTypes: Array<"BREAKOUT" | "MEAN_REVERSION" | "BALANCED">;
+      confirmationTightening: number;
+      confidenceMultiplier: number;
+      stopBufferPct: number;
+      sizeMultiplier: number;
+    };
+    narrative?: string;
+  };
   live?: {
     price: number | null;
     change24hPct: number | null;
@@ -85,11 +160,11 @@ type StrategistResponse = {
   };
   timeframes?: Record<string, TimeframeSummary>;
   analysis?: Analysis;
-  strategies?: {
+  strategies?: Partial<{
     intraday: Strategy;
     scalp: Strategy;
     swing: Strategy;
-  };
+  }>;
 };
 
 const DEFAULT_SYMBOL = "BTCUSDT";
@@ -115,9 +190,21 @@ const formatSignal = (signal: { name: string; timeframe: string; direction: "bul
   return `${label} (${signal.timeframe})`;
 };
 
+const formatRate = (value: number | null | undefined) => {
+  if (value == null || !Number.isFinite(value)) return "n/a";
+  return `${Math.round(value * 100)}%`;
+};
+
 const asList = (items: string[] | undefined) => (Array.isArray(items) && items.length ? items : []);
 
 const asNums = (items: number[] | undefined) => (Array.isArray(items) && items.length ? items : []);
+
+const formatMinutes = (minutes: number | null | undefined) => {
+  if (minutes == null || !Number.isFinite(minutes)) return "n/a";
+  if (minutes < 60) return `${Math.round(minutes)}m`;
+  const hours = minutes / 60;
+  return `${hours.toFixed(1)}h`;
+};
 
 export default function StrategistDashboard() {
   const [mode, setMode] = React.useState<"LTF" | "HTF" | null>(null);
@@ -125,6 +212,9 @@ export default function StrategistDashboard() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [data, setData] = React.useState<StrategistResponse | null>(null);
+  const [evalLoading, setEvalLoading] = React.useState(false);
+  const [evalError, setEvalError] = React.useState<string | null>(null);
+  const [evalVerdict, setEvalVerdict] = React.useState<StrategistResponse["previousVerdict"] | null>(null);
 
   const runAnalysis = React.useCallback(
     async (nextMode: "LTF" | "HTF") => {
@@ -158,10 +248,47 @@ export default function StrategistDashboard() {
     [lookback]
   );
 
+  const evaluateLast = React.useCallback(async () => {
+    const analysisRunId = data?.analysisRunId;
+    setEvalLoading(true);
+    setEvalError(null);
+    try {
+      const res = await fetch("/api/analyze/evaluate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ symbol: DEFAULT_SYMBOL, analysisRunId, horizonMinutes: 120 }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.error || "Evaluation failed");
+      const first = json.breakdown?.[0];
+      setEvalVerdict({
+        label: json.label ?? "mixed",
+        scoreTotal: Number(json.scoreTotal ?? json.score_total ?? 0),
+        horizonMinutes: Number(json.horizonMinutes ?? 120),
+        allowedBy: first?.allowedBy ?? [],
+        blockedBy: first?.blockedBy ?? [],
+        trendAligned: typeof first?.trendAligned === "boolean" ? first.trendAligned : null,
+        counterTrend: typeof first?.counterTrend === "boolean" ? first.counterTrend : null,
+      });
+    } catch (err: any) {
+      setEvalError(err?.message || "Failed to evaluate last analysis.");
+    } finally {
+      setEvalLoading(false);
+    }
+  }, [data?.analysisRunId]);
+
   const live = data?.live ?? null;
   const analysis = data?.analysis ?? null;
   const strategies = data?.strategies ?? null;
   const timeframes = data?.timeframes ?? {};
+  const calibration = data?.calibration ?? null;
+  const previousVerdict = evalVerdict ?? data?.previousVerdict ?? null;
+  const setupLearning = data?.setupLearning ?? [];
+  const sessionContext = data?.sessionContext ?? null;
+  const topSetups = [...setupLearning].sort((a, b) => a.rank - b.rank).slice(0, 2);
+  const strategyList = strategies
+    ? [strategies.intraday, strategies.scalp, strategies.swing].filter((item): item is Strategy => Boolean(item))
+    : [];
   const orderedTimeframes = Object.values(timeframes).sort((a, b) => {
     const order = ["5m", "15m", "1h", "4h", "1d"];
     return order.indexOf(a.timeframe) - order.indexOf(b.timeframe);
@@ -268,11 +395,99 @@ export default function StrategistDashboard() {
         ))}
       </section>
 
+      {data ? (
+        <section className="verdict">
+          <div className="section-head">
+            <h2>Previous Analysis Verdict</h2>
+            <button className="btn ghost small" onClick={evaluateLast} disabled={evalLoading}>
+              {evalLoading ? "Evaluating..." : "Evaluate last analysis now"}
+            </button>
+          </div>
+          {evalError ? <div className="warning">{evalError}</div> : null}
+          <div className="verdict-grid">
+            <div className="verdict-card">
+              <h3>Last verdict</h3>
+              {previousVerdict ? (
+                <>
+                  <div className={`verdict-label ${previousVerdict.label}`}>{previousVerdict.label.toUpperCase()}</div>
+                  <div className="verdict-row">
+                    <span>Score</span>
+                    <strong>{formatNumber(previousVerdict.scoreTotal, 0)}</strong>
+                  </div>
+                  <div className="verdict-row">
+                    <span>Horizon</span>
+                    <strong>{previousVerdict.horizonMinutes} min</strong>
+                  </div>
+                  <div className="verdict-row">
+                    <span>Allowed by</span>
+                    <strong>{asList(previousVerdict.allowedBy).join(", ") || "n/a"}</strong>
+                  </div>
+                  <div className="verdict-row">
+                    <span>Blocked by</span>
+                    <strong>{asList(previousVerdict.blockedBy).join(", ") || "n/a"}</strong>
+                  </div>
+                  <div className="verdict-row">
+                    <span>Trend aligned</span>
+                    <strong>
+                      {previousVerdict.trendAligned == null ? "n/a" : previousVerdict.trendAligned ? "Yes" : "No"}
+                    </strong>
+                  </div>
+                  <div className="verdict-row">
+                    <span>Counter-trend</span>
+                    <strong>
+                      {previousVerdict.counterTrend == null ? "n/a" : previousVerdict.counterTrend ? "Yes" : "No"}
+                    </strong>
+                  </div>
+                </>
+              ) : (
+                <p>No prior evaluation yet. Run an analysis and tap "Evaluate last analysis now".</p>
+              )}
+            </div>
+
+            <div className="verdict-card">
+              <h3>Calibration + Learning</h3>
+              {calibration ? (
+                <>
+                  <p>{calibration.summary}</p>
+                  <div className="calibration-grid">
+                    <span>Factor</span>
+                    <strong>{calibration.factor.toFixed(2)}</strong>
+                    <span>Confidence Delta</span>
+                    <strong>
+                      {calibration.confidenceDelta >= 0 ? "+" : ""}
+                      {calibration.confidenceDelta}%
+                    </strong>
+                    <span>Min confirmations</span>
+                    <strong>{calibration.minConfirmations}</strong>
+                  </div>
+                </>
+              ) : (
+                <p>No calibration data yet.</p>
+              )}
+              {topSetups.length ? (
+                <div className="learning-block">
+                  <p>Top setups in this regime</p>
+                  <ul>
+                    {topSetups.map((setup) => (
+                      <li key={setup.setupKey}>
+                        {setup.setupKey}: {setup.reason}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       {analysis ? (
         <section className="analysis">
           <div className="section-head">
             <h2>Market Analysis</h2>
-            <span className="badge">{data?.model === "openai" ? "AI-Generated" : "Fallback"}</span>
+            <span className="badge">
+              {data?.model === "openai" ? "AI-Generated" : data?.model === "deterministic" ? "Deterministic" : "Fallback"}
+            </span>
           </div>
 
           <div className="analysis-grid">
@@ -331,6 +546,110 @@ export default function StrategistDashboard() {
         </section>
       ) : null}
 
+      {sessionContext ? (
+        <section className="session">
+          <div className="section-head">
+            <h2>Session Context</h2>
+            <span className="badge">UTC</span>
+          </div>
+          <div className="session-grid">
+            <div className="session-card">
+              <h3>Now</h3>
+              <div className="session-row">
+                <span>UTC time</span>
+                <strong>{new Date(sessionContext.utcNow).toUTCString()}</strong>
+              </div>
+              <div className="session-row">
+                <span>Current session</span>
+                <strong>{sessionContext.sessionName}</strong>
+              </div>
+              <div className="session-row">
+                <span>Day type</span>
+                <strong>{sessionContext.dayType}</strong>
+              </div>
+              <div className="session-row">
+                <span>Liquidity</span>
+                <strong>{sessionContext.liquidity}</strong>
+              </div>
+              <div className="session-row">
+                <span>Next transition</span>
+                <strong>{sessionContext.nextTransitionType}</strong>
+              </div>
+              <div className="session-row">
+                <span>Transition at</span>
+                <strong>{new Date(sessionContext.nextTransitionAt).toUTCString()}</strong>
+              </div>
+              <div className="session-row">
+                <span>Countdown</span>
+                <strong>{formatMinutes(sessionContext.minutesToNextTransition)}</strong>
+              </div>
+              <div className="session-row">
+                <span>Stats window</span>
+                <strong>
+                  {sessionContext.transitionWindowMinutes}m | TF {sessionContext.statsTimeframe}
+                </strong>
+              </div>
+              <div className="session-row">
+                <span>Lookback</span>
+                <strong>{sessionContext.lookbackDays} days</strong>
+              </div>
+            </div>
+
+            <div className="session-card">
+              <h3>Expected Behavior</h3>
+              <div className="session-row">
+                <span>Volatility</span>
+                <strong>x{sessionContext.adjustment.expectedVolatilityMultiplier.toFixed(2)}</strong>
+              </div>
+              <div className="session-row">
+                <span>Fakeout risk</span>
+                <strong>{formatRate(sessionContext.adjustment.fakeoutRisk)}</strong>
+              </div>
+              <div className="session-row">
+                <span>Preferred</span>
+                <strong>{sessionContext.adjustment.preferredSetupTypes.join(", ")}</strong>
+              </div>
+              <div className="session-row">
+                <span>Confirmations</span>
+                <strong>
+                  {sessionContext.adjustment.confirmationTightening > 0
+                    ? `+${sessionContext.adjustment.confirmationTightening}`
+                    : "No change"}
+                </strong>
+              </div>
+              <div className="session-row">
+                <span>Stats confidence</span>
+                <strong>{sessionContext.statsConfidence}</strong>
+              </div>
+              {sessionContext.stats ? (
+                <div className="session-metrics">
+                  <div>
+                    <span>Breakout</span>
+                    <strong>{formatRate(sessionContext.stats.breakoutRate)}</strong>
+                  </div>
+                  <div>
+                    <span>Fakeout</span>
+                    <strong>{formatRate(sessionContext.stats.fakeoutRate)}</strong>
+                  </div>
+                  <div>
+                    <span>Continuation</span>
+                    <strong>{formatRate(sessionContext.stats.continuationRate)}</strong>
+                  </div>
+                  <div>
+                    <span>Mean reversion</span>
+                    <strong>{formatRate(sessionContext.stats.meanReversionRate)}</strong>
+                  </div>
+                </div>
+              ) : (
+                <p>No session stats yet.</p>
+              )}
+              {sessionContext.narrative ? <p className="session-note">{sessionContext.narrative}</p> : null}
+              <div className="session-footnote">Based on last {sessionContext.lookbackDays} days stats.</div>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       {strategies ? (
         <section className="strategies">
           <div className="section-head">
@@ -338,8 +657,9 @@ export default function StrategistDashboard() {
             <span className="badge">Intraday / Scalp / Mid/Long</span>
           </div>
 
-          <div className="strategy-grid">
-            {[strategies.intraday, strategies.scalp, strategies.swing].map((strategy, index) => (
+          {strategyList.length ? (
+            <div className="strategy-grid">
+              {strategyList.map((strategy, index) => (
               <div key={strategy.name} className={`strategy-card rise delay-${index + 1}`}>
                 <div className="strategy-header">
                   <div>
@@ -358,6 +678,16 @@ export default function StrategistDashboard() {
                   <span>Classification</span>
                   <strong>{strategy.classification ?? "n/a"}</strong>
                 </div>
+
+                {strategy.sessionPreference ? (
+                  <div className="strategy-row">
+                    <span>Session bias</span>
+                    <strong>
+                      {strategy.sessionPreference.setupType}
+                      {strategy.sessionPreference.preferred ? " (preferred)" : ""}
+                    </strong>
+                  </div>
+                ) : null}
 
                 <div className="strategy-row">
                   <span>Setup</span>
@@ -425,6 +755,16 @@ export default function StrategistDashboard() {
                   </strong>
                 </div>
 
+                {strategy.learning ? (
+                  <div className="strategy-row">
+                    <span>Learning</span>
+                    <strong>
+                      #{strategy.learning.rank} | avgR {strategy.learning.avgR.toFixed(2)} | win{" "}
+                      {(strategy.learning.winRate * 100).toFixed(0)}% | n {strategy.learning.count}
+                    </strong>
+                  </div>
+                ) : null}
+
                 <div className="strategy-notes">
                   <p>Rationale</p>
                   <ul>
@@ -438,8 +778,11 @@ export default function StrategistDashboard() {
                   Confidence: <strong>{formatNumber(strategy.confidence, 0)}</strong>
                 </div>
               </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="warning">No actionable playbooks met the distance or confirmation gates.</div>
+          )}
         </section>
       ) : null}
 
@@ -557,6 +900,10 @@ export default function StrategistDashboard() {
         .btn:hover:not(:disabled) {
           transform: translateY(-1px);
         }
+        .btn.small {
+          padding: 10px 14px;
+          font-size: 0.85rem;
+        }
         .lookback {
           display: grid;
           gap: 8px;
@@ -621,6 +968,76 @@ export default function StrategistDashboard() {
           grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
           gap: 16px;
         }
+        .verdict {
+          margin-top: 40px;
+        }
+        .verdict-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+          gap: 16px;
+        }
+        .verdict-card {
+          padding: 20px;
+          border-radius: 18px;
+          background: rgba(255, 255, 255, 0.9);
+          border: 1px solid rgba(30, 30, 30, 0.1);
+        }
+        .verdict-card h3 {
+          margin-top: 0;
+        }
+        .verdict-label {
+          display: inline-flex;
+          align-items: center;
+          padding: 6px 12px;
+          border-radius: 999px;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          font-size: 0.7rem;
+          text-transform: uppercase;
+          margin-bottom: 12px;
+        }
+        .verdict-label.good {
+          background: rgba(20, 128, 74, 0.12);
+          color: #14804a;
+        }
+        .verdict-label.mixed {
+          background: rgba(224, 143, 46, 0.15);
+          color: #9b5b10;
+        }
+        .verdict-label.bad {
+          background: rgba(187, 59, 45, 0.15);
+          color: #bb3b2d;
+        }
+        .verdict-row {
+          display: grid;
+          grid-template-columns: 130px 1fr;
+          gap: 10px;
+          font-size: 0.88rem;
+          margin-top: 6px;
+        }
+        .verdict-row span {
+          color: var(--ink-soft);
+        }
+        .calibration-grid {
+          margin-top: 12px;
+          display: grid;
+          grid-template-columns: 150px 1fr;
+          gap: 6px 12px;
+          font-size: 0.88rem;
+        }
+        .learning-block {
+          margin-top: 12px;
+          font-size: 0.88rem;
+        }
+        .learning-block p {
+          margin: 0 0 6px;
+          font-weight: 700;
+        }
+        .learning-block ul {
+          margin: 0;
+          padding-left: 18px;
+          color: var(--ink-soft);
+        }
         .card {
           padding: 18px;
           border-radius: 18px;
@@ -657,6 +1074,55 @@ export default function StrategistDashboard() {
         .analysis,
         .strategies {
           margin-top: 44px;
+        }
+        .session {
+          margin-top: 36px;
+        }
+        .session-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+          gap: 16px;
+        }
+        .session-card {
+          padding: 20px;
+          border-radius: 18px;
+          background: rgba(255, 255, 255, 0.9);
+          border: 1px solid rgba(30, 30, 30, 0.1);
+        }
+        .session-card h3 {
+          margin-top: 0;
+        }
+        .session-row {
+          display: grid;
+          grid-template-columns: 130px 1fr;
+          gap: 10px;
+          font-size: 0.88rem;
+          margin-top: 6px;
+        }
+        .session-row span {
+          color: var(--ink-soft);
+        }
+        .session-metrics {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px 12px;
+          margin-top: 12px;
+          font-size: 0.85rem;
+        }
+        .session-metrics span {
+          color: var(--ink-soft);
+          display: block;
+          margin-bottom: 4px;
+        }
+        .session-note {
+          margin-top: 12px;
+          font-size: 0.85rem;
+          color: var(--ink-soft);
+        }
+        .session-footnote {
+          margin-top: 10px;
+          font-size: 0.75rem;
+          color: var(--ink-soft);
         }
         .section-head {
           display: flex;
