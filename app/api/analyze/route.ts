@@ -434,13 +434,44 @@ const responseSchema = {
   },
 };
 
+function normalizeJson(text: string) {
+  return text
+    .replace(/[\u201C\u201D]/g, "\"")
+    .replace(/[\u2018\u2019]/g, "'")
+    .trim();
+}
+
 function extractJsonObject(text: string) {
-  const trimmed = text.trim();
+  const trimmed = normalizeJson(text);
   if (trimmed.startsWith("{") && trimmed.endsWith("}")) return trimmed;
   const first = trimmed.indexOf("{");
   const last = trimmed.lastIndexOf("}");
   if (first >= 0 && last > first) return trimmed.slice(first, last + 1);
   return null;
+}
+
+async function repairJsonWithModel(client: OpenAI, model: string, bad: string) {
+  const res = await client.responses.create({
+    model,
+    temperature: 0,
+    max_output_tokens: 900,
+    text: {
+      format: {
+        type: "json_schema",
+        name: "btc_strategist",
+        schema: responseSchema,
+        strict: true,
+      },
+    },
+    instructions:
+      "You are a strict JSON repair tool. Convert the user's content into ONE valid JSON object that matches the schema. " +
+      "Return ONLY JSON. No markdown, no code fences, no commentary.",
+    input: JSON.stringify({ bad }),
+  });
+
+  const raw = String((res as any).output_text ?? "").trim();
+  const jsonText = extractJsonObject(raw) ?? raw;
+  return JSON.parse(jsonText);
 }
 
 function buildFallbackAnalysis(derived: DerivedSnapshot) {
@@ -519,9 +550,16 @@ async function callModel(payload: any) {
     input: JSON.stringify(payload),
   });
 
-  const text = String((response as any).output_text ?? "").trim();
-  const jsonText = extractJsonObject(text) ?? text;
-  return JSON.parse(jsonText);
+  const outputText =
+    String((response as any).output_text ?? "") ||
+    String((response as any).output?.[0]?.content?.[0]?.text ?? "");
+  const jsonText = extractJsonObject(outputText) ?? outputText;
+
+  try {
+    return JSON.parse(jsonText);
+  } catch {
+    return await repairJsonWithModel(client, model, outputText);
+  }
 }
 
 export async function POST(req: Request) {
