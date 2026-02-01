@@ -68,6 +68,8 @@ type StrategistResponse = {
   generatedAt?: string;
   model?: "openai" | "fallback";
   modelError?: string;
+  liveError?: string;
+  liveSource?: string;
   live?: {
     price: number | null;
     change24hPct: number | null;
@@ -304,8 +306,8 @@ function deriveSnapshot(timeframes: Partial<Record<Timeframe, TimeframeSummary>>
   };
 }
 
-async function fetchBinanceLive(symbol: string) {
-  const url = `https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`;
+async function fetchBinanceLive(symbol: string, baseUrl: string) {
+  const url = `${baseUrl}/api/v3/ticker/24hr?symbol=${symbol}`;
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) throw new Error(`Binance fetch failed: ${res.status}`);
   const data: any = await res.json();
@@ -316,6 +318,23 @@ async function fetchBinanceLive(symbol: string) {
     low24h: safeNum(data.lowPrice),
     volume24h: safeNum(data.quoteVolume),
     timestamp: data.closeTime ? new Date(data.closeTime).toISOString() : null,
+  };
+}
+
+async function fetchCoinbaseLive(symbol: string) {
+  const base = symbol.replace(/USDT$/i, "").replace(/USD$/i, "");
+  const pair = `${base}-USD`;
+  const url = `https://api.exchange.coinbase.com/products/${pair}/ticker`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`Coinbase fetch failed: ${res.status}`);
+  const data: any = await res.json();
+  return {
+    price: safeNum(data.price),
+    change24hPct: null,
+    high24h: safeNum(data.high),
+    low24h: safeNum(data.low),
+    volume24h: safeNum(data.volume),
+    timestamp: data.time ? new Date(data.time).toISOString() : null,
   };
 }
 
@@ -525,7 +544,37 @@ export async function POST(req: Request) {
       return acc;
     }, {});
 
-    const live = await fetchBinanceLive(binanceSymbol);
+    let live = null as StrategistResponse["live"] | null;
+    let liveError: string | undefined;
+    let liveSource: string | undefined;
+
+    try {
+      live = await fetchBinanceLive(binanceSymbol, "https://api.binance.com");
+      liveSource = "binance.com";
+    } catch (err) {
+      try {
+        live = await fetchBinanceLive(binanceSymbol, "https://api.binance.us");
+        liveSource = "binance.us";
+      } catch (err2) {
+        try {
+          live = await fetchCoinbaseLive(binanceSymbol);
+          liveSource = "coinbase";
+        } catch (err3: any) {
+          liveError = err3?.message || "Live price unavailable.";
+        }
+      }
+    }
+
+    if (!live) {
+      live = {
+        price: null,
+        change24hPct: null,
+        high24h: null,
+        low24h: null,
+        volume24h: null,
+        timestamp: null,
+      };
+    }
     const derived = deriveSnapshot(summaries);
 
     const payload = {
@@ -559,6 +608,8 @@ export async function POST(req: Request) {
       generatedAt: new Date().toISOString(),
       model,
       modelError,
+      liveError,
+      liveSource,
       live,
       timeframes: summaries,
       derived,

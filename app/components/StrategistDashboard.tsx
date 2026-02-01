@@ -56,6 +56,8 @@ type StrategistResponse = {
   generatedAt?: string;
   model?: "openai" | "fallback";
   modelError?: string;
+  liveError?: string;
+  liveSource?: string;
   live?: {
     price: number | null;
     change24hPct: number | null;
@@ -190,8 +192,9 @@ export default function StrategistDashboard() {
           </div>
 
           <div className="live-card">
-            <div className="control-title">Live Bitcoin Tape</div>
-            <div className="live-price">{formatPrice(live?.price)}</div>
+          <div className="control-title">Live Bitcoin Tape</div>
+          {data?.liveSource ? <div className="live-source">Source: {data.liveSource}</div> : null}
+          <div className="live-price">{formatPrice(live?.price)}</div>
             <div className={`live-change ${live?.change24hPct && live.change24hPct >= 0 ? "up" : "down"}`}>
               {formatPct(live?.change24hPct)} (24h)
             </div>
@@ -213,6 +216,7 @@ export default function StrategistDashboard() {
                 <strong>{live?.timestamp ? new Date(live.timestamp).toLocaleTimeString() : "n/a"}</strong>
               </div>
             </div>
+            {data?.liveError ? <div className="warning">Live data note: {data.liveError}</div> : null}
             {data?.modelError ? <div className="warning">Model note: {data.modelError}</div> : null}
           </div>
         </div>
@@ -504,6 +508,11 @@ export default function StrategistDashboard() {
         .live-price {
           font-size: 2.1rem;
           font-weight: 700;
+        }
+        .live-source {
+          font-size: 0.8rem;
+          color: var(--ink-soft);
+          margin-bottom: 6px;
         }
         .live-change {
           font-weight: 700;
