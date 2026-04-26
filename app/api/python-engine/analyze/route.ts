@@ -11,13 +11,41 @@ function getEngineUrl() {
   return (process.env.PYTHON_ENGINE_URL || DEFAULT_ENGINE_URL).replace(/\/+$/, "");
 }
 
+function isLocalhostUrl(url: string) {
+  return /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?($|\/)/i.test(url);
+}
+
 export async function POST(req: Request) {
   try {
     const payload = await req.json();
+    const engineUrl = getEngineUrl();
+
+    if (process.env.VERCEL && !process.env.PYTHON_ENGINE_URL) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "PYTHON_ENGINE_URL is not set on Vercel. Deploy the Python engine to a public URL, then set PYTHON_ENGINE_URL in the trader project environment variables.",
+        },
+        { status: 500 }
+      );
+    }
+
+    if (process.env.VERCEL && isLocalhostUrl(engineUrl)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "PYTHON_ENGINE_URL points to localhost, which Vercel cannot reach from production. Use the public HTTPS URL of the deployed Python engine.",
+        },
+        { status: 500 }
+      );
+    }
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30_000);
 
-    const response = await fetch(`${getEngineUrl()}/analyze`, {
+    const response = await fetch(`${engineUrl}/analyze`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
@@ -48,12 +76,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, engineUrlConfigured: Boolean(process.env.PYTHON_ENGINE_URL), result: json });
   } catch (error: any) {
     const timedOut = error?.name === "AbortError";
+    const engineUrl = getEngineUrl();
     return NextResponse.json(
       {
         ok: false,
         error: timedOut
           ? "Python engine request timed out after 30 seconds."
-          : error?.message || "Unable to reach Python engine.",
+          : `Unable to reach Python engine at ${engineUrl}. ${error?.message || "Network request failed."}`,
       },
       { status: timedOut ? 504 : 502 }
     );
