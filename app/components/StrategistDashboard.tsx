@@ -219,7 +219,7 @@ type PythonEngineResult = {
 
 const DEFAULT_SYMBOL = "BTCUSDT";
 const ENGINE_SYMBOL = "BTCUSDT-PERP";
-const ENGINE_TIMEFRAMES = ["5m", "15m", "1h", "4h", "12h", "1d"];
+const ENGINE_TIMEFRAMES = ["1h", "4h", "12h", "1d", "3d"];
 
 const formatNumber = (value: number | null | undefined, digits = 2) => {
   if (value == null || !Number.isFinite(value)) return "n/a";
