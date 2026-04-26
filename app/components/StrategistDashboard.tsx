@@ -167,7 +167,59 @@ type StrategistResponse = {
   }>;
 };
 
+type PythonEngineSetup = {
+  id: string;
+  name: string;
+  action: "LONG" | "SHORT" | "NO_TRADE";
+  timeframe: string;
+  entry: { type: "market" | "limit" | "stop"; price: number };
+  stop: number;
+  targets: Array<{ price: number; sizePct: number }>;
+  risk: {
+    riskPct: number;
+    riskAmount: number;
+    stopDistance: number;
+    positionSizeUsd: number;
+    estimatedLeverage: number;
+    rr: number;
+  };
+  score: {
+    total: number;
+    trend: number;
+    structure: number;
+    momentum: number;
+    volume: number;
+    risk: number;
+    confirmation: number;
+  };
+  status: "VALID" | "REJECTED";
+  rejection_reasons: string[];
+  reasoning: string[];
+  invalidation: string;
+};
+
+type PythonEngineResult = {
+  symbol: string;
+  as_of: string;
+  market_context: {
+    bias: "BULLISH" | "BEARISH" | "NEUTRAL" | "CHOP";
+    regime: string;
+    htf_alignment: string;
+    volatility_state: string;
+    notes: string[];
+  };
+  setups: PythonEngineSetup[];
+  primary_setup: PythonEngineSetup | null;
+  diagnostics: {
+    candles_loaded: Record<string, number>;
+    first_fail_counts: Record<string, number>;
+    warnings: string[];
+  };
+};
+
 const DEFAULT_SYMBOL = "BTCUSDT";
+const ENGINE_SYMBOL = "BTCUSDT-PERP";
+const ENGINE_TIMEFRAMES = ["5m", "15m", "1h", "4h", "12h", "1d"];
 
 const formatNumber = (value: number | null | undefined, digits = 2) => {
   if (value == null || !Number.isFinite(value)) return "n/a";
@@ -215,6 +267,13 @@ export default function StrategistDashboard() {
   const [evalLoading, setEvalLoading] = React.useState(false);
   const [evalError, setEvalError] = React.useState<string | null>(null);
   const [evalVerdict, setEvalVerdict] = React.useState<StrategistResponse["previousVerdict"] | null>(null);
+  const [engineLoading, setEngineLoading] = React.useState(false);
+  const [engineError, setEngineError] = React.useState<string | null>(null);
+  const [engineData, setEngineData] = React.useState<PythonEngineResult | null>(null);
+  const [engineEquity, setEngineEquity] = React.useState(100);
+  const [engineRiskPct, setEngineRiskPct] = React.useState(1);
+  const [engineMinRr, setEngineMinRr] = React.useState(1.8);
+  const [engineMaxLeverage, setEngineMaxLeverage] = React.useState(10);
 
   const runAnalysis = React.useCallback(
     async (nextMode: "LTF" | "HTF") => {
@@ -247,6 +306,38 @@ export default function StrategistDashboard() {
     },
     [lookback]
   );
+
+  const runPythonEngine = React.useCallback(async () => {
+    setEngineLoading(true);
+    setEngineError(null);
+
+    try {
+      const res = await fetch("/api/python-engine/analyze", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          symbol: ENGINE_SYMBOL,
+          timeframes: ENGINE_TIMEFRAMES,
+          lookback,
+          equity: engineEquity,
+          risk_pct: engineRiskPct,
+          min_rr: engineMinRr,
+          max_leverage: engineMaxLeverage,
+          mode: "full",
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || `Python engine request failed (${res.status})`);
+      }
+      setEngineData(json.result as PythonEngineResult);
+    } catch (err: any) {
+      setEngineError(err?.message || "Failed to run Python engine.");
+    } finally {
+      setEngineLoading(false);
+    }
+  }, [engineEquity, engineMaxLeverage, engineMinRr, engineRiskPct, lookback]);
 
   const evaluateLast = React.useCallback(async () => {
     const analysisRunId = data?.analysisRunId;
@@ -293,6 +384,8 @@ export default function StrategistDashboard() {
     const order = ["5m", "15m", "1h", "4h", "1d"];
     return order.indexOf(a.timeframe) - order.indexOf(b.timeframe);
   });
+  const enginePrimary = engineData?.primary_setup ?? engineData?.setups?.[0] ?? null;
+  const engineLoaded = Object.entries(engineData?.diagnostics.candles_loaded ?? {});
 
   return (
     <div className="desk">
@@ -393,6 +486,174 @@ export default function StrategistDashboard() {
             </div>
           </div>
         ))}
+      </section>
+
+      <section className="engine">
+        <div className="section-head">
+          <h2>Python Engine</h2>
+          <span className="badge">Deterministic Trade Filter</span>
+        </div>
+
+        <div className="engine-grid">
+          <div className="engine-panel">
+            <div className="control-title">Run BTCUSDT-PERP Engine</div>
+            <div className="control-subtitle">
+              Calls the FastAPI service through a server-side Next.js proxy and returns the strict setup JSON.
+            </div>
+
+            <div className="engine-form">
+              <label>
+                Equity
+                <input
+                  type="number"
+                  min={1}
+                  step={10}
+                  value={engineEquity}
+                  onChange={(event) => setEngineEquity(Number(event.target.value))}
+                />
+              </label>
+              <label>
+                Risk %
+                <input
+                  type="number"
+                  min={0.1}
+                  max={10}
+                  step={0.1}
+                  value={engineRiskPct}
+                  onChange={(event) => setEngineRiskPct(Number(event.target.value))}
+                />
+              </label>
+              <label>
+                Min RR
+                <input
+                  type="number"
+                  min={0.5}
+                  step={0.1}
+                  value={engineMinRr}
+                  onChange={(event) => setEngineMinRr(Number(event.target.value))}
+                />
+              </label>
+              <label>
+                Max Lev
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={engineMaxLeverage}
+                  onChange={(event) => setEngineMaxLeverage(Number(event.target.value))}
+                />
+              </label>
+            </div>
+
+            <button className="btn primary" onClick={() => void runPythonEngine()} disabled={engineLoading}>
+              {engineLoading ? "Running Python engine..." : "Run Python engine"}
+            </button>
+
+            {engineError ? <div className="error compact">{engineError}</div> : null}
+            <div className="control-footnote">
+              Uses {ENGINE_TIMEFRAMES.join(", ")} with {lookback} bars. Set PYTHON_ENGINE_URL in Vercel for production.
+            </div>
+          </div>
+
+          <div className="engine-panel">
+            <div className="engine-context">
+              <div>
+                <span>Bias</span>
+                <strong className={`context-bias ${engineData?.market_context.bias.toLowerCase() ?? "neutral"}`}>
+                  {engineData?.market_context.bias ?? "n/a"}
+                </strong>
+              </div>
+              <div>
+                <span>Regime</span>
+                <strong>{engineData?.market_context.regime ?? "n/a"}</strong>
+              </div>
+              <div>
+                <span>Volatility</span>
+                <strong>{engineData?.market_context.volatility_state ?? "n/a"}</strong>
+              </div>
+              <div>
+                <span>As of</span>
+                <strong>{engineData?.as_of ? new Date(engineData.as_of).toLocaleTimeString() : "n/a"}</strong>
+              </div>
+            </div>
+
+            {enginePrimary ? (
+              <div className="engine-setup">
+                <div className="strategy-header">
+                  <div>
+                    <h3>{enginePrimary.name}</h3>
+                    <p>{enginePrimary.timeframe} | {enginePrimary.status}</p>
+                  </div>
+                  <span className={`bias ${enginePrimary.action.toLowerCase()}`}>{enginePrimary.action}</span>
+                </div>
+
+                <div className="engine-metrics">
+                  <div>
+                    <span>Score</span>
+                    <strong>{formatNumber(enginePrimary.score.total, 1)}</strong>
+                  </div>
+                  <div>
+                    <span>RR</span>
+                    <strong>{formatNumber(enginePrimary.risk.rr, 2)}</strong>
+                  </div>
+                  <div>
+                    <span>Entry</span>
+                    <strong>{formatPrice(enginePrimary.entry.price)}</strong>
+                  </div>
+                  <div>
+                    <span>Stop</span>
+                    <strong>{formatPrice(enginePrimary.stop)}</strong>
+                  </div>
+                  <div>
+                    <span>Position</span>
+                    <strong>${formatNumber(enginePrimary.risk.positionSizeUsd, 2)}</strong>
+                  </div>
+                  <div>
+                    <span>Leverage</span>
+                    <strong>{formatNumber(enginePrimary.risk.estimatedLeverage, 2)}x</strong>
+                  </div>
+                </div>
+
+                {enginePrimary.targets.length ? (
+                  <div className="engine-targets">
+                    {enginePrimary.targets.map((target, index) => (
+                      <span key={`${target.price}-${index}`}>
+                        T{index + 1} {formatPrice(target.price)} / {target.sizePct}%
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+
+                {enginePrimary.rejection_reasons.length ? (
+                  <div className="warning">
+                    {enginePrimary.rejection_reasons.slice(0, 3).join(" | ")}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="engine-empty">Run the engine to see market context, setup score, risk, and diagnostics.</div>
+            )}
+          </div>
+        </div>
+
+        {engineData ? (
+          <div className="engine-diagnostics">
+            <div>
+              <span>Candles loaded</span>
+              <strong>{engineLoaded.map(([tf, count]) => `${tf}: ${count}`).join(" | ") || "n/a"}</strong>
+            </div>
+            <div>
+              <span>HTF alignment</span>
+              <strong>{engineData.market_context.htf_alignment}</strong>
+            </div>
+            {engineData.diagnostics.warnings.length ? (
+              <div>
+                <span>Warnings</span>
+                <strong>{engineData.diagnostics.warnings.slice(0, 2).join(" | ")}</strong>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </section>
 
       {data ? (
@@ -962,11 +1223,136 @@ export default function StrategistDashboard() {
           color: #a33226;
           font-weight: 600;
         }
+        .error.compact {
+          margin: 14px 0 0;
+          font-size: 0.85rem;
+        }
         .grid.summary {
           margin-top: 36px;
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
           gap: 16px;
+        }
+        .engine {
+          margin-top: 40px;
+        }
+        .engine-grid {
+          display: grid;
+          grid-template-columns: minmax(280px, 0.85fr) minmax(0, 1.15fr);
+          gap: 16px;
+        }
+        .engine-panel {
+          padding: 20px;
+          border-radius: 18px;
+          background: rgba(255, 255, 255, 0.92);
+          border: 1px solid rgba(30, 30, 30, 0.1);
+        }
+        .engine-form {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 10px;
+          margin: 18px 0;
+        }
+        .engine-form label {
+          display: grid;
+          gap: 6px;
+          color: var(--ink-soft);
+          font-size: 0.78rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+        }
+        .engine-form input {
+          min-width: 0;
+          width: 100%;
+          border: 1px solid rgba(30, 30, 30, 0.14);
+          border-radius: 10px;
+          background: #fffaf2;
+          color: var(--ink);
+          padding: 10px;
+          font-size: 0.95rem;
+          font-weight: 700;
+        }
+        .engine-context {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 12px;
+          margin-bottom: 16px;
+        }
+        .engine-context span,
+        .engine-metrics span,
+        .engine-diagnostics span {
+          display: block;
+          color: var(--ink-soft);
+          font-size: 0.75rem;
+          margin-bottom: 4px;
+        }
+        .engine-context strong,
+        .engine-metrics strong,
+        .engine-diagnostics strong {
+          overflow-wrap: anywhere;
+        }
+        .context-bias {
+          display: inline-flex;
+          padding: 4px 8px;
+          border-radius: 999px;
+          font-size: 0.78rem;
+          text-transform: uppercase;
+        }
+        .context-bias.bullish {
+          background: rgba(20, 128, 74, 0.12);
+          color: #14804a;
+        }
+        .context-bias.bearish {
+          background: rgba(187, 59, 45, 0.12);
+          color: #bb3b2d;
+        }
+        .context-bias.neutral,
+        .context-bias.chop {
+          background: rgba(64, 64, 64, 0.1);
+          color: #444;
+        }
+        .engine-setup {
+          display: grid;
+          gap: 14px;
+        }
+        .engine-metrics {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 12px;
+        }
+        .engine-targets {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          font-size: 0.82rem;
+        }
+        .engine-targets span {
+          padding: 6px 10px;
+          border-radius: 999px;
+          background: rgba(15, 110, 90, 0.1);
+          color: #0f6e5a;
+          font-weight: 700;
+        }
+        .engine-empty {
+          min-height: 160px;
+          display: grid;
+          place-items: center;
+          color: var(--ink-soft);
+          text-align: center;
+          border: 1px dashed rgba(30, 30, 30, 0.16);
+          border-radius: 14px;
+          padding: 18px;
+        }
+        .engine-diagnostics {
+          margin-top: 12px;
+          display: grid;
+          gap: 8px;
+          padding: 14px 16px;
+          border-radius: 14px;
+          background: rgba(255, 255, 255, 0.72);
+          border: 1px solid rgba(30, 30, 30, 0.08);
+          font-size: 0.86rem;
         }
         .verdict {
           margin-top: 40px;
@@ -1234,6 +1620,10 @@ export default function StrategistDashboard() {
           background: rgba(64, 64, 64, 0.1);
           color: #444;
         }
+        .bias.no_trade {
+          background: rgba(64, 64, 64, 0.1);
+          color: #444;
+        }
         .status {
           padding: 6px 12px;
           border-radius: 999px;
@@ -1309,6 +1699,21 @@ export default function StrategistDashboard() {
         @media (max-width: 1000px) {
           .hero {
             grid-template-columns: 1fr;
+          }
+          .engine-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+        @media (max-width: 720px) {
+          .engine-form,
+          .engine-context,
+          .engine-metrics {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .section-head {
+            align-items: flex-start;
+            flex-direction: column;
+            gap: 10px;
           }
         }
       `}</style>
